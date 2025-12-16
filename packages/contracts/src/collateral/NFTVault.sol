@@ -12,7 +12,7 @@ import {ReentrancyGuard} from "../libraries/ReentrancyGuard.sol";
 contract NFTVault is ReentrancyGuard {
     /// @notice Owner address
     address public owner;
-
+ 
     /// @notice Floor price oracle
     address public floorPriceOracle;
 
