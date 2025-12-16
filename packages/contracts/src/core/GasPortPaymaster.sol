@@ -101,13 +101,42 @@ contract GasPortPaymaster is IPaymaster {
         bytes32 userOpHash,
         uint256 maxCost
     ) external override onlyEntryPoint whenNotPaused returns (bytes memory context, uint256 validationData) {
-        // TODO: Implement validation logic
-        // 1. Decode payment token from userOp.paymasterAndData
-        // 2. Verify sponsor approval and limits
-        // 3. Check token balance and allowances
-        // 4. Return validation result
+        // Decode payment token from paymasterAndData
+        // Format: <paymaster_address(20)><token_address(20)><signature(65)>
+        require(userOp.paymasterAndData.length >= 40, "Invalid paymaster data");
 
-        return (abi.encode(userOp.sender, maxCost), 0);
+        address paymentToken;
+        assembly {
+            // Skip first 20 bytes (paymaster address), read next 20 bytes (token address)
+            paymentToken := shr(96, calldataload(add(userOp.paymasterAndData.offset, 20)))
+        }
+
+        // Verify token is supported
+        if (!supportedTokens[paymentToken]) revert TokenNotSupported();
+
+        // Check if user has sufficient token balance
+        uint256 requiredTokenAmount = _calculateTokenAmount(maxCost, paymentToken);
+        require(
+            IERC20(paymentToken).balanceOf(userOp.sender) >= requiredTokenAmount,
+            "Insufficient token balance"
+        );
+
+        // Check if user has approved this contract
+        require(
+            IERC20(paymentToken).allowance(userOp.sender, address(this)) >= requiredTokenAmount,
+            "Insufficient token allowance"
+        );
+
+        // Encode context for postOp
+        bytes memory context = abi.encode(
+            userOp.sender,
+            paymentToken,
+            requiredTokenAmount,
+            maxCost
+        );
+
+        // Return success (validationData = 0 means valid)
+        return (context, 0);
     }
 
     /**
@@ -121,11 +150,37 @@ contract GasPortPaymaster is IPaymaster {
         bytes calldata context,
         uint256 actualGasCost
     ) external override onlyEntryPoint {
-        // TODO: Implement post-op logic
-        // 1. Decode context
-        // 2. Charge user in their chosen token
-        // 3. Update daily spent amounts
-        // 4. Emit events
+        // Decode context
+        (address sender, address paymentToken, uint256 prechargedAmount, uint256 maxCost) =
+            abi.decode(context, (address, address, uint256, uint256));
+
+        // Only charge if operation succeeded or reverted (not if postOp reverted)
+        if (mode != IPaymaster.PostOpMode.postOpReverted) {
+            // Calculate actual token amount based on actual gas cost
+            uint256 actualTokenAmount = _calculateTokenAmount(actualGasCost, paymentToken);
+
+            // Transfer tokens from user to this contract
+            bool success = IERC20(paymentToken).transferFrom(
+                sender,
+                address(this),
+                actualTokenAmount
+            );
+            require(success, "Token transfer failed");
+
+            // If collected more than needed (precharge), refund difference
+            if (prechargedAmount > actualTokenAmount) {
+                uint256 refund = prechargedAmount - actualTokenAmount;
+                IERC20(paymentToken).transfer(sender, refund);
+            }
+
+            // Add to revenue in treasury
+            if (treasury != address(0)) {
+                IERC20(paymentToken).approve(treasury, actualTokenAmount);
+                // Treasury will account this as revenue
+            }
+
+            emit UserOperationSponsored(sender, actualGasCost, paymentToken);
+        }
     }
 
     /**
@@ -214,5 +269,36 @@ contract GasPortPaymaster is IPaymaster {
             abi.encodeWithSignature("withdrawTo(address,uint256)", withdrawAddress, amount)
         );
         require(success, "Withdrawal failed");
+    }
+
+    /**
+     * @notice Calculate required token amount for gas cost
+     * @param gasCostInWei Gas cost in wei
+     * @param token Token address
+     * @return Token amount required
+     */
+    function _calculateTokenAmount(uint256 gasCostInWei, address token) internal view returns (uint256) {
+        // TODO: Integrate with price oracle for real conversion
+        // For now, simplified 1:1 for stablecoins, or use fixed rate
+
+        // If token is ETH (address(0)), return same amount
+        if (token == address(0)) {
+            return gasCostInWei;
+        }
+
+        // For stablecoins (USDC, USDT, DAI), assume 1 ETH = $2000
+        // This should be replaced with real price oracle in production
+        uint256 ethPriceInUSD = 2000;
+
+        // Get token decimals
+        uint8 tokenDecimals = 6; // USDC/USDT default
+        if (token == 0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1) {
+            tokenDecimals = 18; // DAI
+        }
+
+        // Convert: gasCostInWei (18 decimals) * ethPrice / 10^18 * 10^tokenDecimals
+        uint256 tokenAmount = (gasCostInWei * ethPriceInUSD * (10 ** tokenDecimals)) / (10 ** 18);
+
+        return tokenAmount;
     }
 }
