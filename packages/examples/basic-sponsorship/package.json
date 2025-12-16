@@ -1,0 +1,18 @@
+{
+  "name": "basic-sponsorship-example",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Basic gas sponsorship example",
+  "scripts": {
+    "start": "tsx index.ts",
+    "dev": "tsx watch index.ts"
+  },
+  "dependencies": {
+    "@gasport/sdk": "workspace:*",
+    "viem": "^2.7.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}
