@@ -12,11 +12,17 @@ import {
   type QuoteOptions,
   ChainId,
   ConfigurationError,
+  QuoteExpiredError,
 } from '@gasport/types';
 import { ChainManager } from './ChainManager';
 import { ConfigValidator } from './ConfigValidator';
 import { createLogger } from '../utils/logger';
 import { EventEmitter } from 'eventemitter3';
+import { CrossChainRouter } from '../routing/CrossChainRouter';
+import { PaymasterManager } from '../paymaster/PaymasterManager';
+import { BridgeManager } from '../bridge/BridgeManager';
+import { TokenManager } from '../tokens/TokenManager';
+import { randomBytes } from 'crypto';
 
 /**
  * Main GasPort SDK client
@@ -42,6 +48,11 @@ export class GasPortClient extends EventEmitter {
   private config: GasPortConfig;
   private chainManager: ChainManager;
   private logger: ReturnType<typeof createLogger>;
+  private router: CrossChainRouter;
+  private paymasterManager: PaymasterManager;
+  private bridgeManager: BridgeManager;
+  private tokenManager: TokenManager;
+  private quotes: Map<string, Quote>;
 
   /**
    * Create a new GasPort client
@@ -62,6 +73,11 @@ export class GasPortClient extends EventEmitter {
     });
 
     this.chainManager = new ChainManager(config, this.logger);
+    this.router = new CrossChainRouter(this.chainManager, config, this.logger);
+    this.paymasterManager = new PaymasterManager(this.chainManager, this.logger);
+    this.bridgeManager = new BridgeManager(this.chainManager, this.logger);
+    this.tokenManager = new TokenManager(this.chainManager, this.logger, config.supportedTokens);
+    this.quotes = new Map();
 
     this.logger.info('GasPort client initialized', {
       chains: config.chains.map((c) => c.slug),
