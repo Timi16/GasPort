@@ -1,0 +1,49 @@
+{
+  "name": "@gasport/sdk",
+  "version": "0.1.0",
+  "description": "Cross-chain gas abstraction SDK for Arbitrum/Orbit chains",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "viem": "^2.7.0",
+    "pino": "^8.17.0",
+    "pino-pretty": "^10.3.0",
+    "ky": "^1.1.0",
+    "ws": "^8.16.0",
+    "eventemitter3": "^5.0.1"
+  },
+  "devDependencies": {
+    "@gasport/types": "workspace:*",
+    "@types/ws": "^8.5.10",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.0"
+  },
+  "keywords": [
+    "ethereum",
+    "arbitrum",
+    "gas-abstraction",
+    "paymaster",
+    "eip-4337"
+  ],
+  "license": "MIT"
+}

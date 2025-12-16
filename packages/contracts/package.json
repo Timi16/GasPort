@@ -1,0 +1,20 @@
+{
+  "name": "@gasport/contracts",
+  "version": "0.1.0",
+  "description": "Smart contracts for GasPort SDK",
+  "scripts": {
+    "build": "forge build",
+    "test": "forge test",
+    "test:gas": "forge test --gas-report",
+    "coverage": "forge coverage",
+    "deploy:testnet": "forge script script/Deploy.s.sol --rpc-url $RPC_URL --broadcast --verify",
+    "deploy:mainnet": "forge script script/Deploy.s.sol --rpc-url $RPC_URL --broadcast --verify --slow",
+    "clean": "forge clean"
+  },
+  "keywords": [
+    "solidity",
+    "smart-contracts",
+    "foundry"
+  ],
+  "license": "MIT"
+}
