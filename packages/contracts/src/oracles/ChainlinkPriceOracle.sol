@@ -162,8 +162,6 @@ contract ChainlinkPriceOracle is IPriceOracle {
 
             // Check staleness
             if (block.timestamp - updatedAt > STALENESS_THRESHOLD) {
-                emit StalePrice(token, updatedAt);
-
                 // Use last known price if available
                 if (lastKnownPrices[token] > 0) {
                     return lastKnownPrices[token];
