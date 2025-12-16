@@ -3,6 +3,7 @@ pragma solidity ^0.8.23;
 
 import {IPaymaster} from "../interfaces/IPaymaster.sol";
 import {UserOperation} from "../libraries/UserOperation.sol";
+import {IPriceOracle} from "../interfaces/IPriceOracle.sol";
 
 /**
  * @title GasPortPaymaster
@@ -15,6 +16,9 @@ contract GasPortPaymaster is IPaymaster {
 
     /// @notice Treasury contract that manages liquidity pools
     address public treasury;
+
+    /// @notice Price oracle for real-time token prices
+    address public priceOracle;
 
     /// @notice Owner address for admin functions
     address public owner;
@@ -76,15 +80,17 @@ contract GasPortPaymaster is IPaymaster {
      * @notice Constructor
      * @param _entryPoint EIP-4337 EntryPoint contract address
      * @param _treasury Treasury contract address
+     * @param _priceOracle Price oracle contract address
      * @param _owner Owner address
      */
-    constructor(address _entryPoint, address _treasury, address _owner) {
-        if (_entryPoint == address(0) || _treasury == address(0) || _owner == address(0)) {
+    constructor(address _entryPoint, address _treasury, address _priceOracle, address _owner) {
+        if (_entryPoint == address(0) || _treasury == address(0) || _priceOracle == address(0) || _owner == address(0)) {
             revert InvalidTreasury();
         }
 
         entryPoint = _entryPoint;
         treasury = _treasury;
+        priceOracle = _priceOracle;
         owner = _owner;
     }
 
@@ -278,17 +284,14 @@ contract GasPortPaymaster is IPaymaster {
      * @return Token amount required
      */
     function _calculateTokenAmount(uint256 gasCostInWei, address token) internal view returns (uint256) {
-        // TODO: Integrate with price oracle for real conversion
-        // For now, simplified 1:1 for stablecoins, or use fixed rate
-
         // If token is ETH (address(0)), return same amount
         if (token == address(0)) {
             return gasCostInWei;
         }
 
-        // For stablecoins (USDC, USDT, DAI), assume 1 ETH = $2000
-        // This should be replaced with real price oracle in production
-        uint256 ethPriceInUSD = 2000;
+        // Get real-time prices from Chainlink oracle
+        uint256 ethPriceInUSD = IPriceOracle(priceOracle).getEthPrice(); // 8 decimals
+        uint256 tokenPriceInUSD = IPriceOracle(priceOracle).getTokenPrice(token); // 8 decimals
 
         // Get token decimals
         uint8 tokenDecimals = 6; // USDC/USDT default
@@ -296,8 +299,9 @@ contract GasPortPaymaster is IPaymaster {
             tokenDecimals = 18; // DAI
         }
 
-        // Convert: gasCostInWei (18 decimals) * ethPrice / 10^18 * 10^tokenDecimals
-        uint256 tokenAmount = (gasCostInWei * ethPriceInUSD * (10 ** tokenDecimals)) / (10 ** 18);
+        // Convert: (gasCostInWei * ethPrice / tokenPrice) * 10^tokenDecimals / 10^18
+        // Both prices have 8 decimals, so they cancel out
+        uint256 tokenAmount = (gasCostInWei * ethPriceInUSD * (10 ** tokenDecimals)) / (tokenPriceInUSD * (10 ** 18));
 
         return tokenAmount;
     }
